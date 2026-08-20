@@ -23,7 +23,10 @@ Invariant: **Verifier != Truth.**
 
 ## Local P0 delta
 
-The current branch carries a local fix and regression coverage for upstream issue #14 (`select()` discards the ring pass when no cache path is given), plus an AIMETON-only fail-closed score-evidence guard that distinguishes valid score evidence from the upstream fallback value `0.5`.
+The current branch carries a local fix and regression coverage for upstream issue #14 (`select()` discards the ring pass when no cache path is given), plus AIMETON-only fail-closed guards that distinguish:
+
+1. valid score evidence from the upstream fallback value `0.5`; and
+2. a genuinely non-degenerate probabilistic A-T distribution from a singleton score-token point estimate.
 
 Key commits:
 
@@ -33,24 +36,47 @@ Key commits:
 - `1c68693179a8c2ac506d2988aeeec6fe334cbec9` — add fail-closed AIMETON score-evidence guard.
 - `92a817a71f900e61fcc682fc9c55eb9b5551010a` — regression coverage for missing/partial/logprob/text score evidence.
 - `9cabf17e3644778893666b864aec924e740006ba` — run the full AIMETON verifier P0 regression suite.
+- `54841440731ac91017c35f39218fea61d5bffd33` — add fail-closed non-degenerate score-distribution support guard.
+- `7202846ca049d19d72db7885fba2f5de6d732ef8` — regress singleton A-T support, literal-only scores, duplicate case variants, and an immutable minimum support floor of two distinct score values.
 
 Upstream issue #14 was still OPEN when checked on 2026-08-20. Before rebasing or promoting this branch, re-check upstream and prefer the upstream fix when equivalent and adequately regression-tested.
+
+## Live Golden-5 finding
+
+The first AIMETON live calibration attempt against RouterAI / `openai/gpt-4o-mini` deliberately failed closed in Site Auditor run `32416294981` rather than manufacturing missing probabilistic evidence.
+
+Observed provider facts:
+
+- provider attempts: `144`;
+- provider successes: `144`;
+- responses with logprobs: `96` / `96` expected score responses;
+- accepted non-degenerate score-distribution events: `86` / `96`;
+- prompt tokens: `173,932`;
+- completion tokens: `14,409`;
+- estimated cost: `3.487929 RUB`.
+
+The ten rejected responses were not HTTP/provider failures. They exposed a semantic extraction limitation: generic `top_logprobs=20` can contain only one A-T score alternative at a score position because non-score tokens consume the remaining top-logprob slots. Upstream-compatible `extract_score()` accepts any non-empty A-T support and renormalizes a singleton to a point estimate. AIMETON therefore must not equate `logprobs present` with `probabilistic distribution measured`.
+
+P0 scientific floor: every required score tag must expose at least **two distinct A-T score values** before AIMETON treats the event as a probabilistic semantic-verifier measurement. This is a minimum validity floor, not proof of good calibration. Future work should prefer constrained score-token decoding/prefill where the backend supports it, then measure calibration quality rather than merely support count.
 
 ## Verified CI evidence
 
 The AIMETON runner inventory currently uses repository-scoped self-hosted runners. Because this fork is public, the P0 regression workflow intentionally uses a fresh standard GitHub-hosted Linux runner instead of exposing an AIMETON self-hosted host to public-repository workflow risk. The workflow does not use `actions/checkout`, `actions/setup-python`, or other Marketplace actions; it materializes the exact SHA with git and runs Python's standard-library `unittest`.
 
-Confirmed runs:
+Confirmed historical runs:
 
 - Run `32398652273`: exact head `6210d63717ef016bd7527c0897a3305836180a2a`; no-cache ring-pass regression passed.
 - Run `32398812463`: exact head `9cabf17e3644778893666b864aec924e740006ba`; full P0 regression suite passed.
+- Run `32398924670`: exact head `0000bd7700f0d3199e68ed401ac47669e8453a81`; P0 regression passed.
+
+The distribution-support guard added after the Golden-5 finding must also pass exact-head CI before any repeat live calibration.
 
 ## Acceptance before AIMETON use
 
 Required before promotion beyond P0:
 
 1. Keep local regression tests green on every AIMETON branch change.
-2. Keep fail-closed coverage for silent flat-score / missing score evidence and add live backend logprob capability probing before any model is trusted.
+2. Keep fail-closed coverage for silent flat-score / missing / singleton score evidence and live backend logprob capability probing before any model is trusted.
 3. Pin an immutable upstream/fork commit for every experiment.
 4. Calibrate on AIMETON-owned data against hard/evidence/human outcomes.
 5. Measure false accept / false reject, calibration, latency, and cost.
