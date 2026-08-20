@@ -1,0 +1,61 @@
+name: AIMETON Verifier P0 Regression
+
+on:
+  push:
+    branches:
+      - "aimeton/verifier-p0"
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aimeton-verifier-p0-regression-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    # The fork is public, so do not expose AIMETON self-hosted runners to PR
+    # execution. GitHub-hosted standard runners are free for public repos.
+    # PR execution is additionally limited to the owner's branch in this repo.
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.user.login == 'Dimar4713')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Materialize exact source without Marketplace actions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          work="$RUNNER_TEMP/aimeton-llm-verifier-$GITHUB_RUN_ID"
+          rm -rf "$work"
+          git init "$work"
+          cd "$work"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "$TARGET_SHA"
+          git checkout --detach FETCH_HEAD
+          actual="$(git rev-parse HEAD)"
+          [[ "$actual" == "$TARGET_SHA" ]]
+          echo "WORK_DIR=$work" >> "$GITHUB_ENV"
+
+      - name: Run AIMETON P0 regression suite
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd "$WORK_DIR"
+          python3 -m unittest discover -s tests -v
+
+      - name: Record exact tested SHA
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd "$WORK_DIR"
+          printf 'tested_sha=%s\n' "$(git rev-parse HEAD)"

@@ -212,19 +212,23 @@ def select(
     # Phase A: ring pass (slot bias cancels around the cycle).
     rng = random.Random(seed)
     ring = ppt.ring_cycle(n, rng)
-    score = directed_for(score_pairs(ring))
+    ring_scores = score_pairs(ring)
+    ring_score = directed_for(ring_scores)
 
     # Pivots = empirical leaders from the ring pass.
     w, c = [0.0] * n, [0] * n
-    ppt.accumulate(ring, score, w, c)
+    ppt.accumulate(ring, ring_score, w, c)
     pivot_set = ppt.select_pivots(w, c, pivots)
     pr_pairs = ppt.pivot_round_pairs(n, pivot_set)
 
-    # Phase B: score the pivot rounds, then aggregate everything.
-    score = directed_for(score_pairs(pr_pairs))
+    # Phase B: score the pivot rounds, then aggregate everything. Keep the
+    # phase-local score maps separate: without a cache, score_pairs(pr_pairs)
+    # does not contain the ring-pass entries.
+    pivot_scores = score_pairs(pr_pairs)
+    pivot_score = directed_for(pivot_scores)
     w, c = [0.0] * n, [0] * n
-    ppt.accumulate(ring, score, w, c)
-    ppt.accumulate(pr_pairs, score, w, c)
+    ppt.accumulate(ring, ring_score, w, c)
+    ppt.accumulate(pr_pairs, pivot_score, w, c)
     best = max(range(n), key=lambda i: (w[i] / c[i] if c[i] else 0.0, -i))
     mean_pref = [w[i] / c[i] if c[i] else 0.0 for i in range(n)]
     return VerifierResult(best, candidates[best], mean_pref,
