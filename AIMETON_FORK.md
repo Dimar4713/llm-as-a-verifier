@@ -17,6 +17,8 @@ The `main` branch is intended to remain a clean synchronization point with upstr
 
 Architectural decision: ADOPT IDEA / TRIAL IMPLEMENTATION / DO NOT STANDARDIZE UPSTREAM DEPENDENCY YET.
 
+Current P0 assessment after the first live calibration: **strong research substrate, not yet production-grade probabilistic verifier**.
+
 The verifier is treated as a probabilistic semantic verification layer inside the wider AIMETON Verification Mesh. It must not override deterministic tests, evidence/provenance failures, policy prohibitions, OCC-49 restrictions, or mandatory HITL gates.
 
 Invariant: **Verifier != Truth.**
@@ -58,6 +60,24 @@ Observed provider facts:
 The ten rejected responses were not HTTP/provider failures. They exposed a semantic extraction limitation: generic `top_logprobs=20` can contain only one A-T score alternative at a score position because non-score tokens consume the remaining top-logprob slots. Upstream-compatible `extract_score()` accepts any non-empty A-T support and renormalizes a singleton to a point estimate. AIMETON therefore must not equate `logprobs present` with `probabilistic distribution measured`.
 
 P0 scientific floor: every required score tag must expose at least **two distinct A-T score values** before AIMETON treats the event as a probabilistic semantic-verifier measurement. This is a minimum validity floor, not proof of good calibration. Future work should prefer constrained score-token decoding/prefill where the backend supports it, then measure calibration quality rather than merely support count.
+
+## What is already strong
+
+- Pairwise comparison is a better primitive for trajectory selection than a single free-form judge score.
+- Probabilistic Pivot Tournament reduces comparison cost from full O(N²) while retaining multiple directed comparisons.
+- Ring-direction / repeated slot swapping gives a concrete mechanism for reducing A/B position bias.
+- The 20-token ordinal scale creates a useful fine-grained semantic signal when the backend actually exposes sufficient score-token support.
+- Token accounting, caching, bounded concurrency and backend abstraction are useful production foundations.
+- The fork has already demonstrated that it can fail closed around upstream compatibility fallbacks without corrupting the clean upstream mirror.
+
+## What remains weak or unproven
+
+- Generic OpenAI-compatible `top_logprobs=20` does **not** guarantee coverage of the 20 score letters; the first live run produced 10/96 singleton score supports.
+- Renormalizing only the visible A-T mass can be badly overconfident when most probability mass is on tokens outside the score alphabet.
+- Literal-text fallback is evidence of a chosen score, not a probability distribution.
+- The 20-letter scale has not yet been calibrated against AIMETON hard/evidence/human outcomes; ordinal spacing is assumed linear by `extract_score`.
+- Model/provider dependence, calibration drift, criterion correlation, and false-accept/false-reject rates are not yet measured.
+- `on_error="tie"` is convenient for general library use but is not acceptable as an AIMETON release-authority fallback; AIMETON callers must remain fail-closed.
 
 ## Verified CI evidence
 
