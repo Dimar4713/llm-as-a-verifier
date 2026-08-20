@@ -1,0 +1,50 @@
+name: AIMETON Verifier P0 Regression
+
+on:
+  push:
+    branches:
+      - "aimeton/verifier-p0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aimeton-verifier-p0-regression
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    # Owner-push-only workflow. Do not add pull_request execution on a
+    # self-hosted runner for this public fork.
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+
+    steps:
+      - name: Materialize exact source without Marketplace actions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          work="$RUNNER_TEMP/aimeton-llm-verifier-$GITHUB_RUN_ID"
+          rm -rf "$work"
+          git init "$work"
+          cd "$work"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+          actual="$(git rev-parse HEAD)"
+          [[ "$actual" == "$GITHUB_SHA" ]]
+          echo "WORK_DIR=$work" >> "$GITHUB_ENV"
+
+      - name: Run no-cache ring-pass regression
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd "$WORK_DIR"
+          python3 -m unittest tests.test_select_no_cache -v
+
+      - name: Record exact tested SHA
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd "$WORK_DIR"
+          printf 'tested_sha=%s\n' "$(git rev-parse HEAD)"
